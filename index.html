@@ -3,131 +3,109 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Emotion Tracker - Face & Typing</title>
-    <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+    <title>AI Tracker Fix</title>
+    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
     <style>
-        body { font-family: -apple-system, system-ui, sans-serif; background: #0f172a; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; overflow: hidden; }
-        
-        #emotionDot {
-            width: 40px; height: 40px; border-radius: 50%; background: #64748b;
-            box-shadow: 0 0 20px rgba(255,255,255,0.2); transition: 0.3s; margin-bottom: 20px;
-        }
-
-        .container { background: #1e293b; padding: 25px; border-radius: 24px; width: 90%; max-width: 450px; text-align: center; position: relative; }
-        
-        #videoArea {
-            position: absolute; top: -60px; right: -20px; width: 100px; height: 100px;
-            border-radius: 50%; overflow: hidden; border: 2px solid #3b82f6; background: black;
-        }
-        video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
-
-        textarea {
-            width: 100%; height: 120px; background: #334155; border: none; border-radius: 15px;
-            color: white; padding: 15px; font-size: 18px; outline: none; margin-top: 10px; resize: none;
-        }
-
-        #statusText { font-size: 1.4rem; font-weight: bold; margin-top: 15px; height: 30px; }
-        .hint { font-size: 12px; color: #94a3b8; margin-top: 5px; }
-        
-        #loadingOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 10; }
+        body { font-family: sans-serif; background: #0f172a; color: white; text-align: center; margin: 0; padding: 20px; }
+        #emotionDot { width: 50px; height: 50px; border-radius: 50%; background: #64748b; margin: 20px auto; transition: 0.3s; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        .box { background: #1e293b; padding: 20px; border-radius: 20px; max-width: 400px; margin: auto; }
+        video { width: 100%; max-width: 150px; border-radius: 10px; background: #000; display: block; margin: 10px auto; transform: scaleX(-1); }
+        textarea { width: 100%; height: 100px; border-radius: 10px; border: none; padding: 10px; font-size: 16px; margin-top: 10px; box-sizing: border-box; }
+        #log { font-size: 12px; color: #94a3b8; margin-top: 10px; white-space: pre-wrap; }
+        #status { font-size: 1.5rem; font-weight: bold; margin: 10px 0; }
     </style>
 </head>
 <body>
 
-<div id="loadingOverlay">טוען מודלים של בינה מלאכותית...</div>
-
 <div id="emotionDot"></div>
-
-<div class="container">
-    <div id="videoArea">
-        <video id="video" autoplay muted playsinline></video>
-    </div>
-    <div id="statusText">מזהה...</div>
-    <textarea id="textInput" placeholder="הקלידו כאן... המצלמה והמקלדת מנתחות אתכם"></textarea>
-    <div class="hint">האלגוריתם משלב הבעות פנים וקצב הקלדה</div>
+<div class="box">
+    <div id="status">מכין מערכת...</div>
+    <video id="video" autoplay muted playsinline></video>
+    <textarea id="textInput" placeholder="הקלידו כאן אחרי שהמצלמה נפתחת..."></textarea>
+    <div id="log">סטטוס מערכת: טוען...</div>
 </div>
 
 <script>
+    const log = (msg) => document.getElementById('log').innerText += "\n" + msg;
     const video = document.getElementById('video');
     const dot = document.getElementById('emotionDot');
-    const status = document.getElementById('statusText');
-    const overlay = document.getElementById('loadingOverlay');
+    const status = document.getElementById('status');
     const input = document.getElementById('textInput');
 
     let faceEmotion = "neutral";
-    let typingSpeed = 0;
-    let lastTime = Date.now();
+    let lastKeyTime = Date.now();
 
-    // 1. טעינת מודלים של Face-API
-    async function loadModels() {
-        const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
-        await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-        await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
-        startVideo();
+    async function init() {
+        try {
+            log("טוען מודלים...");
+            // טעינת המודלים משרת CDN אמין
+            const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
+            await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+            await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
+            log("מודלים נטענו בהצלחה.");
+
+            log("מבקש גישה למצלמה...");
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+            video.srcObject = stream;
+            log("מצלמה מחוברת.");
+            
+            status.innerText = "מזהה רגשות...";
+            startDetection();
+        } catch (err) {
+            log("שגיאה: " + err.message);
+            status.innerText = "תקלה בהפעלה";
+        }
     }
 
-    // 2. הפעלת מצלמה
-    function startVideo() {
-        navigator.mediaDevices.getUserMedia({ video: {} })
-            .then(stream => {
-                video.srcObject = stream;
-                overlay.style.display = 'none';
-                recognizeFaces();
-            })
-            .catch(err => {
-                alert("חובה לאשר מצלמה לצורך הניתוח");
-                console.error(err);
-            });
-    }
-
-    // 3. זיהוי פנים רציף
-    async function recognizeFaces() {
+    function startDetection() {
         setInterval(async () => {
+            if (video.paused || video.ended) return;
+            
             const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withFaceExpressions();
             
-            if (detections.length > 0) {
-                // לוקחים את הרגש עם הניקוד הכי גבוה
+            if (detections && detections.length > 0) {
                 const expressions = detections[0].expressions;
                 faceEmotion = Object.keys(expressions).reduce((a, b) => expressions[a] > expressions[b] ? a : b);
-                updateSystem();
+                updateUI();
             }
-        }, 500);
+        }, 300);
     }
 
-    // 4. ניתוח הקלדה
     input.addEventListener('keydown', () => {
         const now = Date.now();
-        typingSpeed = now - lastTime;
-        lastTime = now;
-        updateSystem();
+        const diff = now - lastKeyTime;
+        lastKeyTime = now;
+
+        // אם ההקלדה מהירה מאוד (כעס/לחץ)
+        if (diff < 100) {
+            updateUI(true); // כפייה של מצב "מהיר"
+        } else {
+            updateUI();
+        }
     });
 
-    // 5. שקלול סופי - השילוב בין פנים למקלדת
-    function updateSystem() {
-        let finalState = { text: "רגיל", color: "#4ade80" };
+    function updateUI(isFastTyping = false) {
+        let color = "#4ade80"; // ירוק (רגיל)
+        let label = "רגוע";
 
-        // לוגיקת שילוב (Fusion Logic)
-        if (faceEmotion === "angry" || (faceEmotion === "neutral" && typingSpeed < 100)) {
-            finalState = { text: "כועס", color: "#ef4444" }; // אדום
-        } 
-        else if (faceEmotion === "sad" || faceEmotion === "fearful" || typingSpeed > 500) {
-            finalState = { text: "מהסס / מודאג", color: "#a855f7" }; // סגול
-        }
-        else if (faceEmotion === "surprised") {
-            finalState = { text: "מופתע / לחוץ", color: "#facc15" }; // צהוב
-        }
-        else if (faceEmotion === "happy") {
-            finalState = { text: "נינוח", color: "#10b981" }; // ירוק בהיר
+        if (faceEmotion === "angry" || isFastTyping) {
+            color = "#ef4444"; label = "כועס/לחוץ";
+        } else if (faceEmotion === "surprised") {
+            color = "#facc15"; label = "מופתע";
+        } else if (faceEmotion === "sad" || faceEmotion === "fearful") {
+            color = "#a855f7"; label = "מודאג/מהסס";
+        } else if (faceEmotion === "happy") {
+            color = "#10b981"; label = "שמח";
         }
 
-        // עדכון ויזואלי
-        dot.style.background = finalState.color;
-        dot.style.boxShadow = `0 0 30px ${finalState.color}`;
-        status.innerText = finalState.text;
-        status.style.color = finalState.color;
+        dot.style.background = color;
+        dot.style.boxShadow = `0 0 25px ${color}`;
+        status.innerText = label;
+        status.style.color = color;
     }
 
-    loadModels();
+    // הפעלה
+    init();
 </script>
 
 </body>
