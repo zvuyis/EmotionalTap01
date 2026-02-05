@@ -3,64 +3,74 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tone Analyzer Dot</title>
+    <title>מערכת לומדת רגשות</title>
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-family: -apple-system, system-ui, sans-serif;
             display: flex;
             align-items: center;
             justify-content: center;
             height: 100vh;
-            background-color: #1a1a1a;
+            background-color: #121212;
             color: white;
             margin: 0;
+            overflow: hidden;
         }
         .container {
             position: relative;
-            background: #2a2a2a;
+            background: #1e1e1e;
             padding: 30px;
-            border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border-radius: 24px;
             width: 90%;
-            max-width: 500px;
+            max-width: 450px;
+            border: 1px solid #333;
         }
-        /* הנקודה בצד */
         #emotionDot {
             position: absolute;
-            top: 20px;
-            left: 20px;
-            width: 25px;
-            height: 25px;
+            top: 25px;
+            left: 25px;
+            width: 20px;
+            height: 20px;
             border-radius: 50%;
-            background-color: #4ade80; /* ירוק התחלתי */
-            box-shadow: 0 0 15px currentColor;
-            transition: all 0.4s ease;
+            background-color: #888;
+            box-shadow: 0 0 15px rgba(255,255,255,0.2);
+            transition: 0.5s cubic-bezier(0.4, 0, 0.2, 1);
         }
         textarea {
             width: 100%;
-            height: 150px;
-            background: #333;
-            border: 1px solid #444;
-            border-radius: 12px;
+            height: 120px;
+            background: #252525;
+            border: 2px solid #333;
+            border-radius: 15px;
             color: white;
             padding: 15px;
             font-size: 18px;
             box-sizing: border-box;
             outline: none;
             resize: none;
+            margin-top: 20px;
         }
-        .label {
-            display: block;
-            margin-bottom: 15px;
-            font-size: 14px;
-            color: #aaa;
+        .info-box {
             text-align: center;
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: #aaa;
         }
         #statusText {
             text-align: center;
-            margin-top: 15px;
-            font-weight: bold;
-            letter-spacing: 1px;
+            margin-top: 20px;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
         }
     </style>
 </head>
@@ -68,71 +78,93 @@
 
 <div class="container">
     <div id="emotionDot"></div>
-    <span class="label">ניתוח רגש לפי הקלדה</span>
-    <textarea id="inputField" placeholder="תתחילו להקליד כאן..."></textarea>
-    <div id="statusText">סטטוס: רגיל</div>
+    <div id="setupArea">
+        <div class="info-box" id="instruction">שלב למידה: הקלידו משפט רגיל כדי שאכיר את הקצב שלכם</div>
+        <textarea id="inputField" placeholder="תקלידו כאן..."></textarea>
+        <div id="statusText">מצב: למידה...</div>
+        <button id="resetBtn" style="display:none;">איפוס למידה</button>
+    </div>
 </div>
 
 <script>
     const input = document.getElementById('inputField');
     const dot = document.getElementById('emotionDot');
     const statusText = document.getElementById('statusText');
+    const instruction = document.getElementById('instruction');
+    const resetBtn = document.getElementById('resetBtn');
 
+    let isLearned = false;
+    let userBaseline = 0; // הממוצע האישי שלך
     let lastKeyTime = Date.now();
-    let backspaceCount = 0;
     let intervals = [];
-    
+    let samples = [];
+
     input.addEventListener('keydown', (e) => {
         const currentTime = Date.now();
         const diff = currentTime - lastKeyTime;
-
-        if (e.key === 'Backspace') {
-            backspaceCount++;
-        }
-
-        if (diff < 2000) {
-            intervals.push(diff);
-        }
-        if (intervals.length > 10) intervals.shift();
-
-        const avgSpeed = intervals.reduce((a, b) => a + b, 0) / intervals.length;
         
-        analyzeEmotion(avgSpeed, backspaceCount);
+        // מתעלמים מהפסקות ארוכות מדי
+        if (diff > 50 && diff < 1500) {
+            if (!isLearned) {
+                samples.push(diff);
+                statusText.innerText = `לומד... (${samples.length}/20)`;
+                
+                if (samples.length >= 20) {
+                    finishLearning();
+                }
+            } else {
+                intervals.push(diff);
+                if (intervals.length > 10) intervals.shift();
+                analyzeRealtime();
+            }
+        }
         
         lastKeyTime = currentTime;
     });
 
-    function analyzeEmotion(speed, corrections) {
-        if (intervals.length < 5) return;
+    function finishLearning() {
+        userBaseline = samples.reduce((a, b) => a + b, 0) / samples.length;
+        isLearned = true;
+        instruction.innerText = "הלמידה הושלמה! עכשיו אנסה לזהות את הרגש שלך";
+        statusText.innerText = "מצב: רגיל";
+        dot.style.backgroundColor = "#4ade80";
+        resetBtn.style.display = "block";
+        input.value = "";
+    }
 
-        let emotion = "רגיל";
-        let color = "#4ade80"; // ירוק
-
-        // לוגיקת זיהוי
-        if (speed < 120 && corrections < 2) {
-            emotion = "כועס (הקלדה מהירה וחדה)";
-            color = "#ff4d4d"; // אדום
+    function analyzeRealtime() {
+        const currentAvg = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+        
+        // השוואה לבסיס האישי שנלמד
+        // אם אתה מקליד ב-30% מהר יותר מהרגיל שלך -> כועס
+        if (currentAvg < userBaseline * 0.7) {
+            updateUI("כועס", "#ff4d4d");
         } 
-        else if (corrections > 4) {
-            emotion = "מודאג (תיקונים מרובים)";
-            color = "#facc15"; // צהוב
-            // איפוס מונה מחיקות אחרי זיהוי כדי לאפשר שינוי מצב
-            if(corrections > 8) backspaceCount = 0; 
+        // אם אתה מקליד ב-60% איטי יותר מהרגיל שלך -> מהסס
+        else if (currentAvg > userBaseline * 1.6) {
+            updateUI("מהסס", "#a855f7");
         }
-        else if (speed > 400) {
-            emotion = "מהסס (עצירות מרובות)";
-            color = "#a855f7"; // סגול
+        else {
+            updateUI("רגיל", "#4ade80");
         }
-
-        updateUI(emotion, color);
     }
 
     function updateUI(text, color) {
         dot.style.backgroundColor = color;
-        dot.style.color = color; // עבור ה-box-shadow
-        statusText.innerText = `סטטוס: ${text}`;
+        statusText.innerText = `מצב: ${text}`;
         statusText.style.color = color;
     }
+
+    resetBtn.onclick = () => {
+        isLearned = false;
+        samples = [];
+        intervals = [];
+        instruction.innerText = "שלב למידה: הקלידו משפט רגיל";
+        statusText.innerText = "מצב: למידה...";
+        statusText.style.color = "white";
+        dot.style.backgroundColor = "#888";
+        resetBtn.style.display = "none";
+    };
 </script>
 
 </body>
