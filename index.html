@@ -3,79 +3,138 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI Emotion Tracker</title>
+    <title>מגן רגשי - MVP</title>
     <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
     <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --safe-green: #4ade80;
+            --warn-yellow: #facc15;
+            --danger-red: #ef4444;
+        }
+
         body { 
-            font-family: -apple-system, sans-serif; 
-            background: #000; 
-            color: white; 
+            font-family: -apple-system, system-ui, sans-serif; 
+            background: var(--bg-color); 
+            color: var(--text-main); 
             margin: 0; 
             display: flex; 
             flex-direction: column; 
             height: 100vh;
-            overflow: hidden;
-        }
-        
-        /* תיבת הטקסט - תופסת את רוב המסך */
-        textarea { 
-            width: 100%; 
-            height: 40vh; 
-            background: #111; 
-            border: none; 
-            color: white; 
-            padding: 20px; 
-            font-size: 20px; 
-            outline: none; 
-            box-sizing: border-box;
-            resize: none;
-            margin-top: 5vh;
+            align-items: center;
         }
 
-        /* הנקודה - ממוקמת באמצע הגובה כדי שלא תוסתר */
+        /* הנקודה המרכזית */
         #emotionDot { 
             position: fixed;
-            top: 50vh; /* ממוקם ב-50% מגובה המסך */
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 40px; 
-            height: 40px; 
-            border-radius: 50%; 
-            background: #444; 
-            transition: all 0.2s ease;
-            z-index: 9999;
-            box-shadow: 0 0 15px rgba(255,255,255,0.2);
+            top: 20%;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: var(--safe-green);
+            box-shadow: 0 0 20px rgba(74, 222, 128, 0.4);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 1000;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 500px;
+            margin-top: 35%;
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 24px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+
+        #statusText {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: var(--safe-green);
+        }
+
+        textarea {
+            width: 100%;
+            height: 150px;
+            background: #334155;
+            border: 2px solid #475569;
+            border-radius: 16px;
+            color: white;
+            padding: 15px;
+            font-size: 18px;
+            outline: none;
+            box-sizing: border-box;
+            resize: none;
+            transition: border 0.3s;
+        }
+
+        textarea:focus { border-color: #3b82f6; }
+
+        #lockOverlay {
+            display: none;
+            margin-top: 10px;
+            color: var(--danger-red);
+            font-weight: bold;
+            font-size: 0.9rem;
         }
 
         /* הסתרת המצלמה */
         video { position: fixed; opacity: 0; pointer-events: none; width: 1px; height: 1px; }
 
         #loader {
-            position: fixed; inset: 0; background: black;
-            display: flex; align-items: center; justify-content: center; z-index: 10000;
-            font-size: 16px; color: #fff;
+            position: fixed; inset: 0; background: var(--bg-color);
+            display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 2000;
         }
+
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.1);
+            width: 36px; height: 36px;
+            border-radius: 50%; border-left-color: #3b82f6;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
 
-<div id="loader">טוען מערכת (נא לאשר מצלמה)...</div>
+<div id="loader">
+    <div class="spinner"></div>
+    <p>מכין הגנה רגשית...</p>
+</div>
+
 <video id="video" autoplay muted playsinline></video>
-<textarea id="textInput" placeholder="הקלידו כאן..."></textarea>
 <div id="emotionDot"></div>
+
+<div class="container">
+    <div id="statusText">מערכת פעילה</div>
+    <textarea id="textInput" placeholder="נסו לכתוב: 'אני שונא את...'"></textarea>
+    <div id="lockOverlay">נבלמה הודעה פוגענית. נשימה עמוקה... (5 שנ')</div>
+</div>
 
 <script>
     const video = document.getElementById('video');
     const dot = document.getElementById('emotionDot');
     const input = document.getElementById('textInput');
+    const status = document.getElementById('statusText');
     const loader = document.getElementById('loader');
+    const lockOverlay = document.getElementById('lockOverlay');
 
-    let lastKeyTime = Date.now();
-    let currentExpression = "neutral";
+    // לוגיקת צירופים
+    const redPatterns = [
+        { words: ["שונא", "את"], label: "שנאה ממוקדת" },
+        { words: ["כולם", "יוצאים"], label: "חשד לחרם" },
+        { words: ["אל", "תענו"], label: "ניסיון השתקה" },
+        { words: ["אפס", "אתה"], label: "פגיעה אישית" }
+    ];
 
-    async function setup() {
+    let isLocked = false;
+    let faceEmotion = "neutral";
+
+    async function init() {
         try {
-            // טעינת המודלים משרת ה-Models הרשמי
             const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
             await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
             await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
@@ -84,59 +143,78 @@
             video.srcObject = stream;
             
             loader.style.display = 'none';
-            input.focus();
-            detect();
+            startAnalysis();
         } catch (e) {
-            loader.innerText = "שגיאה: וודא שאישרת מצלמה ב-HTTPS";
-            console.error(e);
+            alert("יש לאשר גישה למצלמה לטובת זיהוי רגשות");
         }
     }
 
-    async function detect() {
+    function startAnalysis() {
+        // ניתוח פנים רציף
         setInterval(async () => {
-            if (video.paused || video.ended) return;
+            if (isLocked) return;
             const result = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceExpressions();
             if (result) {
                 const ex = result.expressions;
-                // סף רגישות נמוך מאוד לזיהוי כעס
-                if (ex.angry > 0.05) currentExpression = "angry"; 
-                else if (ex.surprised > 0.1) currentExpression = "surprised";
-                else if (ex.sad > 0.1) currentExpression = "sad";
-                else if (ex.happy > 0.2) currentExpression = "happy";
-                else currentExpression = "neutral";
-                
+                faceEmotion = Object.keys(ex).reduce((a, b) => ex[a] > ex[b] ? a : b);
                 updateUI();
             }
-        }, 200);
+        }, 300);
     }
 
     input.addEventListener('input', () => {
-        const now = Date.now();
-        const speed = now - lastKeyTime;
-        lastKeyTime = now;
+        if (isLocked) return;
+        const text = input.value;
+        
+        // בדיקת צירופים
+        const foundPattern = redPatterns.find(p => p.words.every(w => text.includes(w)));
 
-        if (speed < 100) updateUI(true); 
-        else updateUI();
+        if (foundPattern) {
+            triggerLock(foundPattern.label);
+        } else {
+            updateUI();
+        }
     });
 
-    function updateUI(isFast = false) {
-        let color = "#4ade80"; // ירוק כברירת מחדל
+    function updateUI() {
+        if (isLocked) return;
 
-        if (currentExpression === "angry" || isFast) {
-            color = "#ff4d4d"; // אדום
-        } else if (currentExpression === "surprised") {
-            color = "#facc15"; // צהוב
-        } else if (currentExpression === "sad") {
-            color = "#a855f7"; // סגול
-        } else if (currentExpression === "happy") {
-            color = "#10b981"; // ירוק בהיר
+        let color = "#4ade80"; // ירוק
+        let label = "שיח תקין";
+
+        if (faceEmotion === "angry") {
+            color = "#facc15"; // צהוב (כועס אבל עוד לא כתב משהו רע)
+            label = "נראה שאתה קצת טעון...";
         }
 
         dot.style.background = color;
-        dot.style.boxShadow = `0 0 30px ${color}`;
+        dot.style.boxShadow = `0 0 25px ${color}`;
+        status.innerText = label;
+        status.style.color = color;
     }
 
-    setup();
+    function triggerLock(reason) {
+        isLocked = true;
+        dot.style.background = "#ef4444";
+        dot.style.transform = "scale(1.5)";
+        status.innerText = reason;
+        status.style.color = "#ef4444";
+        
+        input.disabled = true;
+        lockOverlay.style.display = "block";
+
+        setTimeout(() => {
+            isLocked = false;
+            input.disabled = false;
+            input.value = "";
+            lockOverlay.style.display = "none";
+            dot.style.transform = "scale(1)";
+            updateUI();
+            input.focus();
+        }, 5000);
+    }
+
+    init();
 </script>
 
 </body>
