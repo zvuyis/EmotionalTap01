@@ -14,15 +14,14 @@
             display: flex; 
             flex-direction: column; 
             height: 100vh;
-            justify-content: flex-start;
             overflow: hidden;
         }
         
-        /* תיבת הטקסט במרכז */
+        /* תיבת הטקסט - תופסת את רוב המסך */
         textarea { 
             width: 100%; 
-            height: 50vh; 
-            background: transparent; 
+            height: 40vh; 
+            background: #111; 
             border: none; 
             color: white; 
             padding: 20px; 
@@ -30,37 +29,39 @@
             outline: none; 
             box-sizing: border-box;
             resize: none;
+            margin-top: 5vh;
         }
 
-        /* הנקודה מעל המקלדת */
+        /* הנקודה - ממוקמת באמצע הגובה כדי שלא תוסתר */
         #emotionDot { 
             position: fixed;
-            bottom: 300px; /* מיקום משוער מעל המקלדת באייפון */
+            top: 50vh; /* ממוקם ב-50% מגובה המסך */
             left: 50%;
-            transform: translateX(-50%);
-            width: 30px; 
-            height: 30px; 
+            transform: translate(-50%, -50%);
+            width: 40px; 
+            height: 40px; 
             border-radius: 50%; 
             background: #444; 
             transition: all 0.2s ease;
-            z-index: 100;
+            z-index: 9999;
+            box-shadow: 0 0 15px rgba(255,255,255,0.2);
         }
 
         /* הסתרת המצלמה */
-        video { position: fixed; opacity: 0; pointer-events: none; }
+        video { position: fixed; opacity: 0; pointer-events: none; width: 1px; height: 1px; }
 
         #loader {
             position: fixed; inset: 0; background: black;
-            display: flex; align-items: center; justify-content: center; z-index: 200;
-            font-size: 14px; color: #888;
+            display: flex; align-items: center; justify-content: center; z-index: 10000;
+            font-size: 16px; color: #fff;
         }
     </style>
 </head>
 <body>
 
-<div id="loader">טוען מערכת...</div>
+<div id="loader">טוען מערכת (נא לאשר מצלמה)...</div>
 <video id="video" autoplay muted playsinline></video>
-<textarea id="textInput" placeholder="תתחיל להקליד..."></textarea>
+<textarea id="textInput" placeholder="הקלידו כאן..."></textarea>
 <div id="emotionDot"></div>
 
 <script>
@@ -74,6 +75,7 @@
 
     async function setup() {
         try {
+            // טעינת המודלים משרת ה-Models הרשמי
             const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
             await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
             await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
@@ -85,20 +87,22 @@
             input.focus();
             detect();
         } catch (e) {
-            loader.innerText = "שגיאה בגישה למצלמה";
+            loader.innerText = "שגיאה: וודא שאישרת מצלמה ב-HTTPS";
+            console.error(e);
         }
     }
 
     async function detect() {
         setInterval(async () => {
+            if (video.paused || video.ended) return;
             const result = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceExpressions();
             if (result) {
                 const ex = result.expressions;
-                // חיזוק זיהוי כעס - אם כעס מעל 0.1 זה כבר נחשב
-                if (ex.angry > 0.1) currentExpression = "angry";
-                else if (ex.surprised > 0.2) currentExpression = "surprised";
-                else if (ex.sad > 0.2) currentExpression = "sad";
-                else if (ex.happy > 0.3) currentExpression = "happy";
+                // סף רגישות נמוך מאוד לזיהוי כעס
+                if (ex.angry > 0.05) currentExpression = "angry"; 
+                else if (ex.surprised > 0.1) currentExpression = "surprised";
+                else if (ex.sad > 0.1) currentExpression = "sad";
+                else if (ex.happy > 0.2) currentExpression = "happy";
                 else currentExpression = "neutral";
                 
                 updateUI();
@@ -111,16 +115,15 @@
         const speed = now - lastKeyTime;
         lastKeyTime = now;
 
-        // אם ההקלדה מהירה מאוד (עצבים)
-        if (speed < 90) updateUI(true); 
+        if (speed < 100) updateUI(true); 
         else updateUI();
     });
 
     function updateUI(isFast = false) {
-        let color = "#4ade80"; // ירוק
+        let color = "#4ade80"; // ירוק כברירת מחדל
 
         if (currentExpression === "angry" || isFast) {
-            color = "#ff4d4d"; // אדום (כועס)
+            color = "#ff4d4d"; // אדום
         } else if (currentExpression === "surprised") {
             color = "#facc15"; // צהוב
         } else if (currentExpression === "sad") {
@@ -130,7 +133,7 @@
         }
 
         dot.style.background = color;
-        dot.style.boxShadow = `0 0 20px ${color}`;
+        dot.style.boxShadow = `0 0 30px ${color}`;
     }
 
     setup();
