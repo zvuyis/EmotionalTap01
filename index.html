@@ -3,115 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>מגן רגשי - MVP</title>
+    <title>מגן רגשי v2</title>
     <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
     <style>
-        :root {
-            --bg-color: #0f172a;
-            --card-bg: #1e293b;
-            --text-main: #f8fafc;
-            --safe-green: #4ade80;
-            --warn-yellow: #facc15;
-            --danger-red: #ef4444;
-        }
-
-        body { 
-            font-family: -apple-system, system-ui, sans-serif; 
-            background: var(--bg-color); 
-            color: var(--text-main); 
-            margin: 0; 
-            display: flex; 
-            flex-direction: column; 
-            height: 100vh;
-            align-items: center;
-        }
-
-        /* הנקודה המרכזית */
+        :root { --bg: #0f172a; --safe: #4ade80; --danger: #ef4444; --warn: #facc15; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); color: white; margin: 0; display: flex; flex-direction: column; align-items: center; height: 100vh; }
+        
         #emotionDot { 
-            position: fixed;
-            top: 20%;
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            background: var(--safe-green);
-            box-shadow: 0 0 20px rgba(74, 222, 128, 0.4);
-            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            z-index: 1000;
+            position: fixed; top: 15%; width: 45px; height: 45px; border-radius: 50%; 
+            background: var(--safe); transition: 0.4s; z-index: 1000;
+            box-shadow: 0 0 15px rgba(255,255,255,0.1);
         }
 
-        .container {
-            width: 90%;
-            max-width: 500px;
-            margin-top: 35%;
-            background: var(--card-bg);
-            padding: 20px;
-            border-radius: 24px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        .container { width: 90%; max-width: 450px; margin-top: 35%; background: #1e293b; padding: 25px; border-radius: 25px; }
+        
+        textarea { 
+            width: 100%; height: 140px; background: #334155; border: 2px solid #475569; 
+            border-radius: 15px; color: white; padding: 15px; font-size: 18px; outline: none; box-sizing: border-box; resize: none;
         }
 
-        #statusText {
-            font-size: 1.2rem;
-            font-weight: bold;
-            margin-bottom: 15px;
-            color: var(--safe-green);
-        }
-
-        textarea {
-            width: 100%;
-            height: 150px;
-            background: #334155;
-            border: 2px solid #475569;
-            border-radius: 16px;
-            color: white;
-            padding: 15px;
-            font-size: 18px;
-            outline: none;
-            box-sizing: border-box;
-            resize: none;
-            transition: border 0.3s;
-        }
-
-        textarea:focus { border-color: #3b82f6; }
-
-        #lockOverlay {
-            display: none;
-            margin-top: 10px;
-            color: var(--danger-red);
-            font-weight: bold;
-            font-size: 0.9rem;
-        }
-
-        /* הסתרת המצלמה */
+        #statusText { font-size: 1.1rem; margin-bottom: 10px; font-weight: 600; }
+        #lockOverlay { display: none; color: var(--danger); font-size: 0.9rem; margin-top: 10px; font-weight: bold; }
         video { position: fixed; opacity: 0; pointer-events: none; width: 1px; height: 1px; }
-
-        #loader {
-            position: fixed; inset: 0; background: var(--bg-color);
-            display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 2000;
-        }
-
-        .spinner {
-            border: 4px solid rgba(255,255,255,0.1);
-            width: 36px; height: 36px;
-            border-radius: 50%; border-left-color: #3b82f6;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
+        #loader { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 2000; }
     </style>
 </head>
 <body>
 
-<div id="loader">
-    <div class="spinner"></div>
-    <p>מכין הגנה רגשית...</p>
-</div>
-
+<div id="loader">טוען הגנה חכמה...</div>
 <video id="video" autoplay muted playsinline></video>
 <div id="emotionDot"></div>
 
 <div class="container">
-    <div id="statusText">מערכת פעילה</div>
-    <textarea id="textInput" placeholder="נסו לכתוב: 'אני שונא את...'"></textarea>
-    <div id="lockOverlay">נבלמה הודעה פוגענית. נשימה עמוקה... (5 שנ')</div>
+    <div id="statusText">מערכת מוכנה</div>
+    <textarea id="textInput" placeholder="כתבו כאן..."></textarea>
+    <div id="lockOverlay">זוהה שיח פוגעני. קחו רגע למחשבה... (5 שנ')</div>
 </div>
 
 <script>
@@ -122,83 +48,69 @@
     const loader = document.getElementById('loader');
     const lockOverlay = document.getElementById('lockOverlay');
 
-    // לוגיקת צירופים
     const redPatterns = [
         { words: ["שונא", "את"], label: "שנאה ממוקדת" },
-        { words: ["כולם", "יוצאים"], label: "חשד לחרם" },
         { words: ["אל", "תענו"], label: "ניסיון השתקה" },
         { words: ["אפס", "אתה"], label: "פגיעה אישית" }
     ];
 
+    const safeContext = ["כי", "אבל", "אוהב", "חחח"]; // מילים שמנטרלות חשד לאלימות
+
     let isLocked = false;
-    let faceEmotion = "neutral";
 
     async function init() {
         try {
             const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
             await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
             await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
-            
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
             video.srcObject = stream;
-            
             loader.style.display = 'none';
-            startAnalysis();
-        } catch (e) {
-            alert("יש לאשר גישה למצלמה לטובת זיהוי רגשות");
-        }
+            analyze();
+        } catch (e) { loader.innerText = "נא לאשר מצלמה"; }
     }
 
-    function startAnalysis() {
-        // ניתוח פנים רציף
+    function analyze() {
         setInterval(async () => {
             if (isLocked) return;
             const result = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceExpressions();
-            if (result) {
+            const text = input.value;
+            
+            // לוגיקה חכמה: בודק אם יש צירוף אדום, וגם שאין מילת "הגנה"
+            const hasPattern = redPatterns.find(p => p.words.every(w => text.includes(w)));
+            const hasSafeWord = safeContext.some(w => text.includes(w));
+
+            if (hasPattern && !hasSafeWord) {
+                triggerLock(hasPattern.label);
+            } else if (result) {
                 const ex = result.expressions;
-                faceEmotion = Object.keys(ex).reduce((a, b) => ex[a] > ex[b] ? a : b);
-                updateUI();
+                const topEx = Object.keys(ex).reduce((a, b) => ex[a] > ex[b] ? a : b);
+                updateUI(topEx);
             }
-        }, 300);
+        }, 400);
     }
 
-    input.addEventListener('input', () => {
+    function updateUI(emotion = "neutral") {
         if (isLocked) return;
-        const text = input.value;
+        let color = "var(--safe)";
+        let txt = "שיח תקין";
+
+        if (emotion === "angry") {
+            color = "var(--warn)";
+            txt = "שימו לב לטון ההקשה...";
+        }
         
-        // בדיקת צירופים
-        const foundPattern = redPatterns.find(p => p.words.every(w => text.includes(w)));
-
-        if (foundPattern) {
-            triggerLock(foundPattern.label);
-        } else {
-            updateUI();
-        }
-    });
-
-    function updateUI() {
-        if (isLocked) return;
-
-        let color = "#4ade80"; // ירוק
-        let label = "שיח תקין";
-
-        if (faceEmotion === "angry") {
-            color = "#facc15"; // צהוב (כועס אבל עוד לא כתב משהו רע)
-            label = "נראה שאתה קצת טעון...";
-        }
-
         dot.style.background = color;
-        dot.style.boxShadow = `0 0 25px ${color}`;
-        status.innerText = label;
+        status.innerText = txt;
         status.style.color = color;
     }
 
     function triggerLock(reason) {
+        if (isLocked) return;
         isLocked = true;
-        dot.style.background = "#ef4444";
-        dot.style.transform = "scale(1.5)";
-        status.innerText = reason;
-        status.style.color = "#ef4444";
+        dot.style.background = "var(--danger)";
+        status.innerText = "עצור: " + reason;
+        status.style.color = "var(--danger)";
         
         input.disabled = true;
         lockOverlay.style.display = "block";
@@ -206,9 +118,8 @@
         setTimeout(() => {
             isLocked = false;
             input.disabled = false;
-            input.value = "";
             lockOverlay.style.display = "none";
-            dot.style.transform = "scale(1)";
+            // שיפור: לא מוחקים הכל, רק נותנים פוקוס חזרה
             updateUI();
             input.focus();
         }, 5000);
@@ -216,6 +127,5 @@
 
     init();
 </script>
-
 </body>
 </html>
