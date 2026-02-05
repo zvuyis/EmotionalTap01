@@ -3,168 +3,131 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>מערכת לומדת רגשות</title>
+    <title>AI Emotion Tracker - Face & Typing</title>
+    <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
     <style>
-        body {
-            font-family: -apple-system, system-ui, sans-serif;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            background-color: #121212;
-            color: white;
-            margin: 0;
-            overflow: hidden;
-        }
-        .container {
-            position: relative;
-            background: #1e1e1e;
-            padding: 30px;
-            border-radius: 24px;
-            width: 90%;
-            max-width: 450px;
-            border: 1px solid #333;
-        }
+        body { font-family: -apple-system, system-ui, sans-serif; background: #0f172a; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; overflow: hidden; }
+        
         #emotionDot {
-            position: absolute;
-            top: 25px;
-            left: 25px;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background-color: #888;
-            box-shadow: 0 0 15px rgba(255,255,255,0.2);
-            transition: 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 40px; height: 40px; border-radius: 50%; background: #64748b;
+            box-shadow: 0 0 20px rgba(255,255,255,0.2); transition: 0.3s; margin-bottom: 20px;
         }
+
+        .container { background: #1e293b; padding: 25px; border-radius: 24px; width: 90%; max-width: 450px; text-align: center; position: relative; }
+        
+        #videoArea {
+            position: absolute; top: -60px; right: -20px; width: 100px; height: 100px;
+            border-radius: 50%; overflow: hidden; border: 2px solid #3b82f6; background: black;
+        }
+        video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+
         textarea {
-            width: 100%;
-            height: 120px;
-            background: #252525;
-            border: 2px solid #333;
-            border-radius: 15px;
-            color: white;
-            padding: 15px;
-            font-size: 18px;
-            box-sizing: border-box;
-            outline: none;
-            resize: none;
-            margin-top: 20px;
+            width: 100%; height: 120px; background: #334155; border: none; border-radius: 15px;
+            color: white; padding: 15px; font-size: 18px; outline: none; margin-top: 10px; resize: none;
         }
-        .info-box {
-            text-align: center;
-            font-size: 14px;
-            margin-bottom: 10px;
-            color: #aaa;
-        }
-        #statusText {
-            text-align: center;
-            margin-top: 20px;
-            font-weight: 600;
-            font-size: 1.1rem;
-        }
-        button {
-            background: #3498db;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 10px;
-            cursor: pointer;
-            width: 100%;
-            margin-top: 10px;
-        }
+
+        #statusText { font-size: 1.4rem; font-weight: bold; margin-top: 15px; height: 30px; }
+        .hint { font-size: 12px; color: #94a3b8; margin-top: 5px; }
+        
+        #loadingOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 10; }
     </style>
 </head>
 <body>
 
+<div id="loadingOverlay">טוען מודלים של בינה מלאכותית...</div>
+
+<div id="emotionDot"></div>
+
 <div class="container">
-    <div id="emotionDot"></div>
-    <div id="setupArea">
-        <div class="info-box" id="instruction">שלב למידה: הקלידו משפט רגיל כדי שאכיר את הקצב שלכם</div>
-        <textarea id="inputField" placeholder="תקלידו כאן..."></textarea>
-        <div id="statusText">מצב: למידה...</div>
-        <button id="resetBtn" style="display:none;">איפוס למידה</button>
+    <div id="videoArea">
+        <video id="video" autoplay muted playsinline></video>
     </div>
+    <div id="statusText">מזהה...</div>
+    <textarea id="textInput" placeholder="הקלידו כאן... המצלמה והמקלדת מנתחות אתכם"></textarea>
+    <div class="hint">האלגוריתם משלב הבעות פנים וקצב הקלדה</div>
 </div>
 
 <script>
-    const input = document.getElementById('inputField');
+    const video = document.getElementById('video');
     const dot = document.getElementById('emotionDot');
-    const statusText = document.getElementById('statusText');
-    const instruction = document.getElementById('instruction');
-    const resetBtn = document.getElementById('resetBtn');
+    const status = document.getElementById('statusText');
+    const overlay = document.getElementById('loadingOverlay');
+    const input = document.getElementById('textInput');
 
-    let isLearned = false;
-    let userBaseline = 0; // הממוצע האישי שלך
-    let lastKeyTime = Date.now();
-    let intervals = [];
-    let samples = [];
+    let faceEmotion = "neutral";
+    let typingSpeed = 0;
+    let lastTime = Date.now();
 
-    input.addEventListener('keydown', (e) => {
-        const currentTime = Date.now();
-        const diff = currentTime - lastKeyTime;
-        
-        // מתעלמים מהפסקות ארוכות מדי
-        if (diff > 50 && diff < 1500) {
-            if (!isLearned) {
-                samples.push(diff);
-                statusText.innerText = `לומד... (${samples.length}/20)`;
-                
-                if (samples.length >= 20) {
-                    finishLearning();
-                }
-            } else {
-                intervals.push(diff);
-                if (intervals.length > 10) intervals.shift();
-                analyzeRealtime();
+    // 1. טעינת מודלים של Face-API
+    async function loadModels() {
+        const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+        await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
+        startVideo();
+    }
+
+    // 2. הפעלת מצלמה
+    function startVideo() {
+        navigator.mediaDevices.getUserMedia({ video: {} })
+            .then(stream => {
+                video.srcObject = stream;
+                overlay.style.display = 'none';
+                recognizeFaces();
+            })
+            .catch(err => {
+                alert("חובה לאשר מצלמה לצורך הניתוח");
+                console.error(err);
+            });
+    }
+
+    // 3. זיהוי פנים רציף
+    async function recognizeFaces() {
+        setInterval(async () => {
+            const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withFaceExpressions();
+            
+            if (detections.length > 0) {
+                // לוקחים את הרגש עם הניקוד הכי גבוה
+                const expressions = detections[0].expressions;
+                faceEmotion = Object.keys(expressions).reduce((a, b) => expressions[a] > expressions[b] ? a : b);
+                updateSystem();
             }
-        }
-        
-        lastKeyTime = currentTime;
+        }, 500);
+    }
+
+    // 4. ניתוח הקלדה
+    input.addEventListener('keydown', () => {
+        const now = Date.now();
+        typingSpeed = now - lastTime;
+        lastTime = now;
+        updateSystem();
     });
 
-    function finishLearning() {
-        userBaseline = samples.reduce((a, b) => a + b, 0) / samples.length;
-        isLearned = true;
-        instruction.innerText = "הלמידה הושלמה! עכשיו אנסה לזהות את הרגש שלך";
-        statusText.innerText = "מצב: רגיל";
-        dot.style.backgroundColor = "#4ade80";
-        resetBtn.style.display = "block";
-        input.value = "";
-    }
+    // 5. שקלול סופי - השילוב בין פנים למקלדת
+    function updateSystem() {
+        let finalState = { text: "רגיל", color: "#4ade80" };
 
-    function analyzeRealtime() {
-        const currentAvg = intervals.reduce((a, b) => a + b, 0) / intervals.length;
-        
-        // השוואה לבסיס האישי שנלמד
-        // אם אתה מקליד ב-30% מהר יותר מהרגיל שלך -> כועס
-        if (currentAvg < userBaseline * 0.7) {
-            updateUI("כועס", "#ff4d4d");
+        // לוגיקת שילוב (Fusion Logic)
+        if (faceEmotion === "angry" || (faceEmotion === "neutral" && typingSpeed < 100)) {
+            finalState = { text: "כועס", color: "#ef4444" }; // אדום
         } 
-        // אם אתה מקליד ב-60% איטי יותר מהרגיל שלך -> מהסס
-        else if (currentAvg > userBaseline * 1.6) {
-            updateUI("מהסס", "#a855f7");
+        else if (faceEmotion === "sad" || faceEmotion === "fearful" || typingSpeed > 500) {
+            finalState = { text: "מהסס / מודאג", color: "#a855f7" }; // סגול
         }
-        else {
-            updateUI("רגיל", "#4ade80");
+        else if (faceEmotion === "surprised") {
+            finalState = { text: "מופתע / לחוץ", color: "#facc15" }; // צהוב
         }
+        else if (faceEmotion === "happy") {
+            finalState = { text: "נינוח", color: "#10b981" }; // ירוק בהיר
+        }
+
+        // עדכון ויזואלי
+        dot.style.background = finalState.color;
+        dot.style.boxShadow = `0 0 30px ${finalState.color}`;
+        status.innerText = finalState.text;
+        status.style.color = finalState.color;
     }
 
-    function updateUI(text, color) {
-        dot.style.backgroundColor = color;
-        statusText.innerText = `מצב: ${text}`;
-        statusText.style.color = color;
-    }
-
-    resetBtn.onclick = () => {
-        isLearned = false;
-        samples = [];
-        intervals = [];
-        instruction.innerText = "שלב למידה: הקלידו משפט רגיל";
-        statusText.innerText = "מצב: למידה...";
-        statusText.style.color = "white";
-        dot.style.backgroundColor = "#888";
-        resetBtn.style.display = "none";
-    };
+    loadModels();
 </script>
 
 </body>
